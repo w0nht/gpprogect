@@ -4,69 +4,73 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config({ path: '.env.local' });
+// Carrega as variáveis do .env.local
+dotenv.config({ path: '.env' });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const dbConfig = {
-  host: process.env.MYSQL_HOST || 'localhost',
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'gp_2026',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  host: process.env.MYSQL_HOST,
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+  port: parseInt(process.env.MYSQL_PORT || '3306'), // Crucial para Railway
 };
 
 async function setupDatabase() {
   let connection;
 
   try {
-    console.log('🔗 Conectando ao MySQL...');
+    console.log(`🔗 Conectando ao MySQL do Railway (${dbConfig.host}:${dbConfig.port})...`);
+    
+    // Conexão inicial para criar o banco (se necessário)
+    // No Railway, o banco 'railway' geralmente já existe, mas mantemos por segurança
     connection = await mysql.createConnection({
       host: dbConfig.host,
       user: dbConfig.user,
       password: dbConfig.password,
+      port: dbConfig.port,
+      // CONFIGURAÇÕES DE SEGURANÇA PARA RAILWAY:
+      allowPublicKeyRetrieval: true, 
+      ssl: {
+        rejectUnauthorized: false // Permite conectar sem validar o certificado da CA
+      }
     });
 
-    console.log('✅ Conectado ao MySQL');
+    console.log('✅ Conectado com sucesso ao Railway');
 
-    // Create database if not exists
-    console.log(`📊 Criando banco de dados: ${dbConfig.database}`);
+    // Cria o banco se não existir (O Railway costuma já dar um chamado 'railway')
+    console.log(`📊 Verificando banco de dados: ${dbConfig.database}`);
     await connection.execute(`CREATE DATABASE IF NOT EXISTS ${dbConfig.database}`);
-    console.log('✅ Banco de dados criado/verificado');
-
-    // Switch to the database
+    
+    // Seleciona o banco
     await connection.execute(`USE ${dbConfig.database}`);
 
-    // Read SQL script
+    // Lê o script SQL
     const sqlPath = path.join(__dirname, 'create-database.sql');
+    if (!fs.existsSync(sqlPath)) {
+        throw new Error(`Arquivo SQL não encontrado em: ${sqlPath}`);
+    }
     const sqlScript = fs.readFileSync(sqlPath, 'utf-8');
 
-    // Split by semicolon and execute each statement
+    // Executa os comandos
     const statements = sqlScript
       .split(';')
       .map((stmt) => stmt.trim())
       .filter((stmt) => stmt.length > 0);
 
-    console.log(`📝 Executando ${statements.length} declarações SQL...`);
+    console.log(`📝 Executando ${statements.length} comandos no banco remoto...`);
 
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i];
+    for (const stmt of statements) {
       if (stmt.toLowerCase().includes('create table')) {
-        const tableName = stmt.match(/create table if not exists (\w+)/i)?.[1];
-        console.log(`   └─ Criando tabela: ${tableName}`);
+        console.log(`   └─ Sincronizando tabela...`);
       }
       await connection.execute(stmt);
     }
 
-    console.log('✅ Todas as tabelas criadas com sucesso!');
-
-    // Insert sample data (normas NBR)
-    console.log('📥 Inserindo dados de referência (NBR 9050)...');
-
+    // Inserção de dados NBR 9050 (O "Cérebro" do projeto)
+    console.log('📥 Alimentando o cérebro da IA (Normas NBR 9050)...');
     await connection.execute(`
       INSERT IGNORE INTO normas_nbr (titulo, descricao, alturas_acessibilidade, profundidade_alcance)
       VALUES (
@@ -77,36 +81,18 @@ async function setupDatabase() {
       )
     `);
 
-    console.log('✅ Dados de referência inseridos');
-
-    // Verify tables
-    const [tables] = await connection.execute('SHOW TABLES');
-    console.log('\n📋 Tabelas criadas:');
-    tables.forEach((row, index) => {
-      const tableName = Object.values(row)[0];
-      console.log(`   ${index + 1}. ${tableName}`);
-    });
-
-    console.log('\n✨ Setup do banco de dados concluído com sucesso!');
-    console.log('\n📌 Próximos passos:');
-    console.log('   1. Configure as variáveis de ambiente em .env.local');
-    console.log('   2. Adicione GROQ_API_KEY para a integração com IA');
-    console.log('   3. Execute: npm run dev');
+    console.log('✨ Setup GP-2026 concluído no Railway!');
 
   } catch (error) {
-    console.error('❌ Erro durante setup:', error.message);
-    console.error('\nDicas de troubleshooting:');
-    console.error('  • Verifique se MySQL está rodando');
-    console.error('  • Verifique credenciais de banco (.env.local)');
-    console.error('  • Verifique permissões do usuário MySQL');
+    console.error('❌ Erro no setup do Railway:', error.message);
+    console.log('\n💡 DICA: Verifique se a porta no .env.local é 48264 e não 3306.');
     process.exit(1);
   } finally {
     if (connection) {
       await connection.end();
-      console.log('\n🔌 Conexão fechada');
+      console.log('🔌 Conexão encerrada.');
     }
   }
 }
 
-// Run setup
 setupDatabase();
