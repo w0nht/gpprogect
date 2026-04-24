@@ -1,4 +1,4 @@
-# GP-2026 - IA & Gêmeo Digital
+# IA & Gêmeo Digital (Esse protótipo foi desenvolvido para o Grand Prix Nacional SENAI 2026)
 ## Sistema Inteligente de Gestão de Acessibilidade e Inclusão
 
 Um dashboard moderno e acessível para gerenciar relatos de dificuldades de acessibilidade, processos com IA Llama e ordens de serviço automáticas.
